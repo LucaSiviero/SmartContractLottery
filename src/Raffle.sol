@@ -12,7 +12,8 @@ import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interface
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 
 contract Raffle is VRFConsumerBaseV2 {
-    error Raffe__NotEnoughEthSent();
+    error Raffle__NotEnoughEthSent();
+    error Raffle__TransferFail();
 
     // @dev The number of confirmations (number of blocks after the one that contains the random number) by the network to actually start to use the random number.
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
@@ -39,6 +40,7 @@ contract Raffle is VRFConsumerBaseV2 {
 
     address payable[] private s_players;
     uint256 private s_lastTimeStamp;
+    address s_lastWinner;
 
     event EnteredRaffle(address playerAddress);
 
@@ -61,7 +63,7 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function enterRaffle() public payable {
         if (msg.value < i_entranceFee) {
-            revert Raffe__NotEnoughEthSent();
+            revert Raffle__NotEnoughEthSent();
         }
         s_players.push(payable(msg.sender));
         emit EnteredRaffle(msg.sender);
@@ -89,10 +91,13 @@ contract Raffle is VRFConsumerBaseV2 {
         uint256 requestId,
         uint256[] memory _randomWords
     ) internal override {
-        /* require(s_requests[_requestId].exists, "request not found");
-        s_requests[_requestId].fulfilled = true;
-        s_requests[_requestId].randomWords = _randomWords;
-        emit RequestFulfilled(_requestId, _randomWords); */
+        uint256 indexOfWinner = _randomWords[0] % s_players.length;
+        address payable winner = s_players[indexOfWinner];
+        s_lastWinner = winner;
+        (bool success, ) = winner.call{value: address(this).balance}("");
+        if (!success) {
+            revert Raffle__TransferFail();
+        }
     }
 
     // Getters
