@@ -8,21 +8,55 @@ pragma solidity ^0.8.18;
  * @dev Implements Chainlink VRFv2
  */
 
-contract Raffle {
+import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+
+contract Raffle is VRFConsumerBaseV2 {
     error Raffe__NotEnoughEthSent();
 
+    // @dev The number of confirmations (number of blocks after the one that contains the random number) by the network to actually start to use the random number.
+    uint16 private constant REQUEST_CONFIRMATIONS = 3;
+
+    // @dev How many random words do you want to be generated
+    uint32 private constant NUM_WORDS = 1;
+
     uint256 private immutable i_entranceFee;
-    address payable[] private s_players;
-    //@dev Duration of lottery extraction in seconds
+
+    // @dev Duration of lottery extraction in seconds
     uint256 immutable i_interval;
+
+    // @dev Address for VRF Coordinator (The Chainlink contract to call)
+    VRFCoordinatorV2Interface immutable i_coordinator;
+
+    // @dev The gas lane key hash value, which is the maximum gas price we pay for a request in wei.
+    // @dev It is an ID for the offchain VRF job that is triggered by the request
+    bytes32 immutable i_keyHash;
+
+    uint64 immutable i_subscriptionId;
+
+    // @dev How much gas we're going to allow the contract to spend when the response of the offchain VRF comes back to the contract
+    uint32 immutable i_callbackGasLimit;
+
+    address payable[] private s_players;
     uint256 private s_lastTimeStamp;
 
     event EnteredRaffle(address playerAddress);
 
-    constructor(uint256 entranceFee, uint256 interval) {
+    constructor(
+        uint256 entranceFee,
+        uint256 interval,
+        address coordinator,
+        bytes32 keyHash,
+        uint64 subscriptionId,
+        uint32 callbackGasLimit
+    ) VRFConsumerBaseV2(coordinator) {
         i_entranceFee = entranceFee;
         i_interval = interval;
         s_lastTimeStamp = block.timestamp;
+        i_coordinator = VRFCoordinatorV2Interface(coordinator);
+        i_keyHash = keyHash;
+        i_subscriptionId = subscriptionId;
+        i_callbackGasLimit = callbackGasLimit;
     }
 
     function enterRaffle() public payable {
@@ -40,6 +74,25 @@ contract Raffle {
         if (block.timestamp - s_lastTimeStamp < i_interval) {
             revert();
         }
+        // @dev Implements the VRFv2Consumer method to perform the random words request
+        uint256 requestId = i_coordinator.requestRandomWords(
+            i_keyHash,
+            i_subscriptionId,
+            REQUEST_CONFIRMATIONS,
+            i_callbackGasLimit,
+            NUM_WORDS
+        );
+    }
+
+    // @dev Overrides the function from VRFConsumerBaseV2 to actually get the random number back
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] memory _randomWords
+    ) internal override {
+        /* require(s_requests[_requestId].exists, "request not found");
+        s_requests[_requestId].fulfilled = true;
+        s_requests[_requestId].randomWords = _randomWords;
+        emit RequestFulfilled(_requestId, _randomWords); */
     }
 
     // Getters
