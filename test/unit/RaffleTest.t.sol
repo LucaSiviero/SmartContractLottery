@@ -18,6 +18,10 @@ contract RaffleTest is Test {
     bytes32 keyHash;
     uint64 subscriptionId;
     uint32 callbackGasLimit;
+    address linkAddress;
+
+    // Events must be redefined in other files
+    event EnteredRaffle(address indexed playerAddress);
 
     function setUp() external {
         DeployRaffle deployRaffle = new DeployRaffle();
@@ -29,7 +33,8 @@ contract RaffleTest is Test {
             coordinator,
             keyHash,
             subscriptionId,
-            callbackGasLimit
+            callbackGasLimit,
+            linkAddress
         ) = helperConfig.activeNetworkConfig();
 
         vm.deal(PLAYER, STARTING_USER_BALANCE);
@@ -61,5 +66,28 @@ contract RaffleTest is Test {
         // Assert
         address payable[] memory players = raffle.getPlayers();
         assert(players[0] == PLAYER);
+    }
+
+    function testEmitsEventOnEntrance() public {
+        vm.prank(PLAYER);
+        // Events can have up to 3 topic. The event we're going to emit has only one topic. Fourth parameter of expectEmit is to specifiy if there's any data or indexed parameter
+        // Last parameter is the emitter address: the address of the contract that emitted the event
+        vm.expectEmit(true, false, false, false, address(raffle));
+        // After expectEmit we actually emit the event (has to be the same of the contract)
+        emit EnteredRaffle(PLAYER);
+        // Then we trigger the actual function the will emit the event we want to test
+        raffle.enterRaffle{value: 0.1 ether}();
+    }
+
+    function testCantEnterWhenRaffleIsCalculating() public {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: 0.1 ether}();
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+        raffle.performUpkepp("");
+
+        vm.expectRevert(Raffle.Raffle__StateNotOpen.selector);
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: 0.1 ether}();
     }
 }
