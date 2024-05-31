@@ -121,7 +121,7 @@ contract Raffle is VRFConsumerBaseV2 {
     //1. Get a random number
     //2. Use the random number to pick a player
     //3. Automatically call pickWinner
-    function performUpkepp(bytes calldata /* performData */) external {
+    function performUpkeep(bytes calldata /* performData */) external {
         (bool upkeepNeeded, ) = checkUpkeep("");
         if (!upkeepNeeded) {
             revert Raffle__UpkeepNotNeeded(
