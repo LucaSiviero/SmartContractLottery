@@ -8,13 +8,14 @@ import {LinkToken} from "../test/mocks/LinkToken.sol";
 import {DevOpsTools} from "../lib/foundry-devops/src/DevOpsTools.sol";
 
 contract CreateSubscription is Script {
-    function createSubscriptionUsingConfig() public returns (uint64, address) {
-        HelperConfig helperConfig = new HelperConfig();
-
+    function createSubscriptionUsingConfig(
+        HelperConfig helperConfig
+    ) public returns (uint64, address) {
         (, , address coordinator, , , , ) = helperConfig.activeNetworkConfig();
         (uint64 subscriptionId, address vrfCoordinator) = createSubscription(
             coordinator
         );
+        console.log("Created subscription with coordinator", coordinator);
         return (subscriptionId, vrfCoordinator);
     }
 
@@ -29,16 +30,15 @@ contract CreateSubscription is Script {
         return (subscriptionId, _vrfCoordinator);
     }
 
-    function run() external returns (uint64, address) {
-        return createSubscriptionUsingConfig();
+    function run(HelperConfig helperConfig) external returns (uint64, address) {
+        return createSubscriptionUsingConfig(helperConfig);
     }
 }
 
 contract FundSubscription is Script {
     uint96 public constant FUND_AMOUNT = 3 ether;
 
-    function fundSubscriptionUsingConfig() public {
-        HelperConfig helperConfig = new HelperConfig();
+    function fundSubscriptionUsingConfig(HelperConfig helperConfig) public {
         (
             ,
             ,
@@ -50,7 +50,7 @@ contract FundSubscription is Script {
         ) = helperConfig.activeNetworkConfig();
         if (subscriptionId == 0) {
             CreateSubscription createSub = new CreateSubscription();
-            (uint64 updatedSubId, ) = createSub.run();
+            (uint64 updatedSubId, ) = createSub.run(helperConfig);
             subscriptionId = updatedSubId;
         }
         fundSubscription(coordinator, subscriptionId, linkAddress);
@@ -86,8 +86,8 @@ contract FundSubscription is Script {
         }
     }
 
-    function run() external {
-        fundSubscriptionUsingConfig();
+    function run(HelperConfig helperConfig) external {
+        fundSubscriptionUsingConfig(helperConfig);
     }
 }
 
@@ -110,18 +110,20 @@ contract AddConsumer is Script {
         vm.stopBroadcast();
     }
 
-    function addConsumerUsingConfig(address _contractAddress) public {
-        HelperConfig helperConfig = new HelperConfig();
+    function addConsumerUsingConfig(
+        address _contractAddress,
+        HelperConfig helperConfig
+    ) public {
         (, , address coordinator, , uint64 subscriptionId, , ) = helperConfig
             .activeNetworkConfig();
         addConsumer(_contractAddress, coordinator, subscriptionId);
     }
 
-    function run() external {
+    function run(HelperConfig helperConfig) external {
         address raffleContractAddress = DevOpsTools.get_most_recent_deployment(
             "Raffle",
             block.chainid
         );
-        addConsumerUsingConfig(raffleContractAddress);
+        addConsumerUsingConfig(raffleContractAddress, helperConfig);
     }
 }

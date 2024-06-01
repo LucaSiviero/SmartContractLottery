@@ -5,6 +5,8 @@ import {Test, console} from "forge-std/Test.sol";
 import {Raffle} from "../../src/Raffle.sol";
 import {DeployRaffle} from "../../script/DeployRaffle.s.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol";
 
 contract RaffleTest is Test {
     Raffle raffle;
@@ -23,9 +25,21 @@ contract RaffleTest is Test {
     // Events must be redefined in other files
     event EnteredRaffle(address indexed playerAddress);
 
-    function setUp() external {
+    modifier enterRaffle() {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: 1 ether}();
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+        _;
+    }
+
+    function setUp() public {
         DeployRaffle deployRaffle = new DeployRaffle();
         (raffle, helperConfig) = deployRaffle.run();
+        console.log(
+            "In setUp, after deployRuffle, coordinator is",
+            coordinator
+        );
 
         (
             entranceFee,
@@ -36,7 +50,10 @@ contract RaffleTest is Test {
             callbackGasLimit,
             linkAddress
         ) = helperConfig.activeNetworkConfig();
-
+        console.log(
+            "In setUp, after helperConfig, coordinator is",
+            coordinator
+        );
         vm.deal(PLAYER, STARTING_USER_BALANCE);
     }
 
@@ -114,5 +131,124 @@ contract RaffleTest is Test {
 
         (bool upkeepNeeded, ) = raffle.checkUpkeep("");
         assert(!upkeepNeeded);
+    }
+
+    //////////////////////
+    // performUpKeep    //
+    //////////////////////
+
+    function testPerformUpkeepCanOnlyRunIfCheckUpkeepIsTrue() public {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: 0.1 ether}();
+        vm.warp(block.timestamp + interval + 1);
+        //vm.roll(block.number + 1);
+        raffle.performUpkeep("");
+    }
+
+    function testPerformUpkeepRevertsIfCheckUpkeepIsFalse() public {
+        uint256 currentBalance = 0;
+        uint256 currentPlayers = 0;
+        uint256 raffleState = 0;
+        /*  I expect the transaction to revert with the specified error. I also expect the error to be thrown with certain parameters.
+            That's why I wrap the error selector with abi.encodeWithSelector, so that I can pass parameters too
+        */
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Raffle.Raffle__UpkeepNotNeeded.selector,
+                currentBalance,
+                currentPlayers,
+                raffleState
+            )
+        );
+        raffle.performUpkeep("");
+    }
+
+    function testPerformUpkeepUpdatesRaffleStateAndEmitsRequestId()
+        public
+        enterRaffle
+    {
+        // This line allows foundry to record the logs generated from the next transaction!
+        vm.recordLogs();
+        // This way we can emit the requestId with an event
+        raffle.performUpkeep("");
+        // This line uses the recorded logs in foundry vm to populate an array of logs!
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        // To retrieve the specific log, we have to know the index of the log in the entries array. We could use the command forge test --debug.
+        // In this case, we know that the event we're listening for is the second event emitted by the performUpkeep() transaction.
+        // It's importat to know that all logs are stored as bytes32, but to access the data we have to use the topics array selector.
+        // topics has always in the starting position (0) the data that identifies the event itself. So, every access to topics is offsetted by 1
+        bytes32 requestId = entries[1].topics[1];
+        console.log("Yoo");
+        assertEq(
+            entries[1].topics[0],
+            keccak256("RequestedRaffleWinner(uint256)")
+        );
+        assertEq(requestId, bytes32(uint256(1)));
+        Raffle.RaffleState raffleState = raffle.getRaffleState();
+        assert(uint256(raffleState) == 1);
+    }
+
+    ///////////////////////////
+    // fulfillRandomWords    //
+    ///////////////////////////
+
+    function testFulfillRandomWordsCanOnlyBeCalledAfterPerformUpkeep(
+        uint256 randomRequestId
+    ) public enterRaffle {
+        vm.expectRevert("nonexistent request");
+        VRFCoordinatorV2Mock(coordinator).fulfillRandomWords(
+            randomRequestId,
+            address(raffle)
+        );
+    }
+
+    function testFulfillRandomWordsPicksAWinnerResetsAndSendsMoney()
+        public
+        enterRaffle
+    {
+        uint256 additionalEntrants = 5;
+        uint256 startingIndex = 1;
+
+        for (
+            uint256 i = startingIndex;
+            i < startingIndex + additionalEntrants;
+            i++
+        ) {
+            address player = address(uint160(i));
+            hoax(player, STARTING_USER_BALANCE);
+            raffle.enterRaffle{value: 1 ether}();
+        }
+        // Everyone partecipates with 1 ether each (Degenerate gamblers!! :D)
+        uint256 prize = 1 ether * (additionalEntrants + 1);
+
+        vm.recordLogs();
+        raffle.performUpkeep("");
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        bytes32 requestId = entries[1].topics[1];
+        console.logBytes32(requestId);
+        console.log("Coordinator in test is", coordinator);
+        VRFCoordinatorV2Mock(coordinator).fulfillRandomWords(
+            uint256(requestId),
+            address(raffle)
+        );
+
+        uint256 previousTimestamp = raffle.getLastTimestamp();
+
+        assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+        address lastWinner = raffle.getLastWinner();
+        assert(lastWinner != address(0));
+        assert(raffle.getPlayers().length == 0);
+
+        uint256 lastTimestamp = raffle.getLastTimestamp();
+        assert(lastTimestamp >= previousTimestamp);
+        console.log("lastWinner balance", lastWinner.balance);
+        console.log(
+            "Value calculated",
+            prize + STARTING_USER_BALANCE - 1 ether
+        );
+        assert(
+            // Dude won the prize, so he has the prize plus his initial balance (- 1 ether because he gambled it) as a balance!
+            lastWinner.balance == (prize + (STARTING_USER_BALANCE - 1 ether))
+        );
     }
 }

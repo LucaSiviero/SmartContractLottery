@@ -4,6 +4,7 @@ pragma solidity ^0.8.18;
 import {Script} from "forge-std/Script.sol";
 import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol";
 import {LinkToken} from "../test/mocks/LinkToken.sol";
+import {console} from "forge-std/Test.sol";
 
 contract HelperConfig is Script {
     struct NetworkConfig {
@@ -22,6 +23,7 @@ contract HelperConfig is Script {
         if (block.chainid == 111555111) {
             activeNetworkConfig = getSepoliaEthConfig();
         } else {
+            console.log("Istantiated helper config for anvil");
             activeNetworkConfig = getOrCreateAnvilEthConfig();
         }
     }
@@ -41,7 +43,12 @@ contract HelperConfig is Script {
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
         // address defaults to 0x0, so we check if it was istantiated.
+        console.log(
+            "In helper, coordinator is",
+            activeNetworkConfig.coordinator
+        );
         if (activeNetworkConfig.coordinator != address(0)) {
+            console.log("Returning network config");
             return activeNetworkConfig;
         }
         uint96 baseFee = 0.25 ether; //0.25 LINK
@@ -53,7 +60,7 @@ contract HelperConfig is Script {
         );
         LinkToken linkToken = new LinkToken();
         vm.stopBroadcast();
-
+        console.log("VRFCoordinatorMock is", address(vrfCoordinatorMock));
         return
             NetworkConfig({
                 entranceFee: 0.01 ether,

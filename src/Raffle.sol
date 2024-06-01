@@ -10,6 +10,7 @@ pragma solidity ^0.8.18;
 
 import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import {console} from "forge-std/Test.sol";
 
 contract Raffle is VRFConsumerBaseV2 {
     error Raffle__NotEnoughEthSent();
@@ -59,6 +60,7 @@ contract Raffle is VRFConsumerBaseV2 {
 
     event EnteredRaffle(address indexed playerAddress);
     event WinnerPicked(address indexed winnerAddress);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
     constructor(
         uint256 entranceFee,
@@ -106,6 +108,7 @@ contract Raffle is VRFConsumerBaseV2 {
         bool isOpenState = RaffleState.OPEN == s_raffleState;
         bool hasBalance = address(this).balance > 0;
         bool hasPlayers = s_players.length > 0;
+        console.log(timeIntervalPassed, isOpenState, hasBalance, hasPlayers);
 
         // If we needed to just return upkeepNeeded, at this point, this would be enough to return it
         // Because in Solidity, a return statemet can be omitted if the variable has been declared in the returns part of the function signature
@@ -131,14 +134,16 @@ contract Raffle is VRFConsumerBaseV2 {
             );
         }
         s_raffleState = RaffleState.CALCULATING;
+        console.log("In performUpkeep, coordinator is", address(i_coordinator));
         // @dev Implements the VRFv2Consumer method to perform the random words request
-        /* uint256 requestId =  */ i_coordinator.requestRandomWords(
+        uint256 requestId = i_coordinator.requestRandomWords(
             i_keyHash,
             i_subscriptionId,
             REQUEST_CONFIRMATIONS,
             i_callbackGasLimit,
             NUM_WORDS
         );
+        emit RequestedRaffleWinner(requestId);
     }
 
     // The contract code follows the CEI design pattern: Checks, Effects, Interactions.
@@ -176,5 +181,13 @@ contract Raffle is VRFConsumerBaseV2 {
 
     function getPlayers() external view returns (address payable[] memory) {
         return s_players;
+    }
+
+    function getLastWinner() external view returns (address) {
+        return s_lastWinner;
+    }
+
+    function getLastTimestamp() external view returns (uint256) {
+        return s_lastTimeStamp;
     }
 }
