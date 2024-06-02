@@ -28,7 +28,6 @@ contract HelperConfig is Script {
     }
 
     function getSepoliaEthConfig() public view returns (NetworkConfig memory) {
-        console.log("Loading Sepolia config!");
         return
             NetworkConfig({
                 entranceFee: 0.001 ether,
@@ -44,12 +43,7 @@ contract HelperConfig is Script {
 
     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
         // address defaults to 0x0, so we check if it was istantiated.
-        console.log(
-            "In helper, coordinator is",
-            activeNetworkConfig.coordinator
-        );
         if (activeNetworkConfig.coordinator != address(0)) {
-            console.log("Returning network config");
             return activeNetworkConfig;
         }
         uint96 baseFee = 0.25 ether; //0.25 LINK
@@ -61,7 +55,6 @@ contract HelperConfig is Script {
         );
         LinkToken linkToken = new LinkToken();
         vm.stopBroadcast();
-        console.log("VRFCoordinatorMock is", address(vrfCoordinatorMock));
         return
             NetworkConfig({
                 entranceFee: 0.001 ether,

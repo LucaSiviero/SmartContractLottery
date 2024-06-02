@@ -108,7 +108,6 @@ contract Raffle is VRFConsumerBaseV2 {
         bool isOpenState = RaffleState.OPEN == s_raffleState;
         bool hasBalance = address(this).balance > 0;
         bool hasPlayers = s_players.length > 0;
-        console.log(timeIntervalPassed, isOpenState, hasBalance, hasPlayers);
 
         // If we needed to just return upkeepNeeded, at this point, this would be enough to return it
         // Because in Solidity, a return statemet can be omitted if the variable has been declared in the returns part of the function signature
@@ -134,7 +133,6 @@ contract Raffle is VRFConsumerBaseV2 {
             );
         }
         s_raffleState = RaffleState.CALCULATING;
-        console.log("In performUpkeep, coordinator is", address(i_coordinator));
         // @dev Implements the VRFv2Consumer method to perform the random words request
         uint256 requestId = i_coordinator.requestRandomWords(
             i_keyHash,

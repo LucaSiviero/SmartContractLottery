@@ -39,10 +39,6 @@ contract RaffleTest is Test {
     function setUp() public {
         DeployRaffle deployRaffle = new DeployRaffle();
         (raffle, helperConfig) = deployRaffle.run();
-        console.log(
-            "In setUp, after deployRuffle, coordinator is",
-            coordinator
-        );
 
         (
             entranceFee,
@@ -54,10 +50,6 @@ contract RaffleTest is Test {
             linkAddress,
             deployerKey
         ) = helperConfig.activeNetworkConfig();
-        console.log(
-            "In setUp, after helperConfig, coordinator is",
-            coordinator
-        );
         vm.deal(PLAYER, STARTING_USER_BALANCE);
     }
 
@@ -182,7 +174,6 @@ contract RaffleTest is Test {
         // It's importat to know that all logs are stored as bytes32, but to access the data we have to use the topics array selector.
         // topics has always in the starting position (0) the data that identifies the event itself. So, every access to topics is offsetted by 1
         bytes32 requestId = entries[1].topics[1];
-        console.log("Yoo");
         assertEq(
             entries[1].topics[0],
             keccak256("RequestedRaffleWinner(uint256)")
@@ -240,8 +231,6 @@ contract RaffleTest is Test {
         raffle.performUpkeep("");
         Vm.Log[] memory entries = vm.getRecordedLogs();
         bytes32 requestId = entries[1].topics[1];
-        console.logBytes32(requestId);
-        console.log("Coordinator in test is", coordinator);
         VRFCoordinatorV2Mock(coordinator).fulfillRandomWords(
             uint256(requestId),
             address(raffle)
@@ -256,11 +245,6 @@ contract RaffleTest is Test {
 
         uint256 lastTimestamp = raffle.getLastTimestamp();
         assert(lastTimestamp >= previousTimestamp);
-        console.log("lastWinner balance", lastWinner.balance);
-        console.log(
-            "Value calculated",
-            prize + STARTING_USER_BALANCE - ENTRANCE_FEE
-        );
         assert(
             // Dude won the prize, so he has the prize plus his initial balance (- ENTRANCE_FEE because he gambled it) as a balance!
             lastWinner.balance ==

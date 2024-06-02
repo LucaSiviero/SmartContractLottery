@@ -28,14 +28,12 @@ contract DeployRaffle is Script {
             coordinator = vrfCoordinatorAddress;
             subscriptionId = subId;
             FundSubscription fundSubscription = new FundSubscription();
-            console.log("Guess it's stopping here...");
             fundSubscription.fundSubscription(
                 vrfCoordinatorAddress,
                 subId,
                 linkAddress,
                 deployerKey
             );
-            console.log("Will not reach this");
         }
 
         vm.startBroadcast(deployerKey);
@@ -48,18 +46,12 @@ contract DeployRaffle is Script {
             callbackGasLimit
         );
         vm.stopBroadcast();
-        console.log("coordinator is", coordinator);
         AddConsumer addConsumer = new AddConsumer();
         addConsumer.addConsumer(
             address(raffle),
             coordinator,
             subscriptionId,
             deployerKey
-        );
-        console.log(
-            "Adding coordinator with subId",
-            coordinator,
-            subscriptionId
         );
         return (raffle, helperConfig);
     }

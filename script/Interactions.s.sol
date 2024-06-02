@@ -25,7 +25,6 @@ contract CreateSubscription is Script {
         address _vrfCoordinator,
         uint256 _deployerKey
     ) public returns (uint64, address) {
-        console.log("Creating subscription on ChainId: ", block.chainid);
         vm.startBroadcast(_deployerKey);
         uint64 subscriptionId = VRFCoordinatorV2Mock(_vrfCoordinator)
             .createSubscription();
@@ -77,13 +76,10 @@ contract FundSubscription is Script {
             );
             vm.stopBroadcast();
         } else {
-            console.log("I'm going to log LinkToken data");
             console.log(LinkToken(_linkAddress).balanceOf(msg.sender));
-            console.log("First log done");
             console.log(msg.sender);
             console.log(LinkToken(_linkAddress).balanceOf(address(this)));
             console.log(address(this));
-            console.log("Link token address is", _linkAddress);
             vm.startBroadcast(_deployerKey);
             LinkToken(_linkAddress).transferAndCall(
                 _coordinator,
