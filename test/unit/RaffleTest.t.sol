@@ -12,6 +12,8 @@ contract RaffleTest is Test {
     Raffle raffle;
     address public PLAYER = makeAddr("player");
     uint256 public constant STARTING_USER_BALANCE = 1000 ether;
+    uint256 public constant ENTRANCE_FEE = 0.001 ether;
+
     HelperConfig helperConfig;
 
     uint256 entranceFee;
@@ -21,13 +23,14 @@ contract RaffleTest is Test {
     uint64 subscriptionId;
     uint32 callbackGasLimit;
     address linkAddress;
+    uint256 deployerKey;
 
     // Events must be redefined in other files
     event EnteredRaffle(address indexed playerAddress);
 
     modifier enterRaffle() {
         vm.prank(PLAYER);
-        raffle.enterRaffle{value: 1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
         vm.warp(block.timestamp + interval + 1);
         vm.roll(block.number + 1);
         _;
@@ -48,7 +51,8 @@ contract RaffleTest is Test {
             keyHash,
             subscriptionId,
             callbackGasLimit,
-            linkAddress
+            linkAddress,
+            deployerKey
         ) = helperConfig.activeNetworkConfig();
         console.log(
             "In setUp, after helperConfig, coordinator is",
@@ -72,14 +76,14 @@ contract RaffleTest is Test {
         // Act
         vm.expectRevert(Raffle.Raffle__NotEnoughEthSent.selector);
         // Assert
-        raffle.enterRaffle{value: 0.005 ether}();
+        raffle.enterRaffle{value: 0.000001 ether}();
     }
 
     function testRaffleRecordsPlayerWhenEnters() public {
         // Arrange
         vm.prank(PLAYER);
         // Act
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
         // Assert
         address payable[] memory players = raffle.getPlayers();
         assert(players[0] == PLAYER);
@@ -93,19 +97,19 @@ contract RaffleTest is Test {
         // After expectEmit we actually emit the event (has to be the same of the contract)
         emit EnteredRaffle(PLAYER);
         // Then we trigger the actual function the will emit the event we want to test
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
     }
 
     function testCantEnterWhenRaffleIsCalculating() public {
         vm.prank(PLAYER);
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
         vm.warp(block.timestamp + interval + 1);
         vm.roll(block.number + 1);
         raffle.performUpkeep("");
 
         vm.expectRevert(Raffle.Raffle__StateNotOpen.selector);
         vm.prank(PLAYER);
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
     }
 
     //////////////////////
@@ -124,7 +128,7 @@ contract RaffleTest is Test {
 
     function testCheckUpKeepReturnsFalseIfRaffleNotOpen() public {
         vm.prank(PLAYER);
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
         vm.warp(block.timestamp + interval + 1);
         vm.roll(block.number + 1);
         raffle.performUpkeep("");
@@ -139,7 +143,7 @@ contract RaffleTest is Test {
 
     function testPerformUpkeepCanOnlyRunIfCheckUpkeepIsTrue() public {
         vm.prank(PLAYER);
-        raffle.enterRaffle{value: 0.1 ether}();
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
         vm.warp(block.timestamp + interval + 1);
         //vm.roll(block.number + 1);
         raffle.performUpkeep("");
@@ -183,7 +187,11 @@ contract RaffleTest is Test {
             entries[1].topics[0],
             keccak256("RequestedRaffleWinner(uint256)")
         );
-        assertEq(requestId, bytes32(uint256(1)));
+        if (block.chainid == 31337) {
+            assertEq(requestId, bytes32(uint256(1)));
+        } else {
+            assert(requestId > 0);
+        }
         Raffle.RaffleState raffleState = raffle.getRaffleState();
         assert(uint256(raffleState) == 1);
     }
@@ -191,10 +199,16 @@ contract RaffleTest is Test {
     ///////////////////////////
     // fulfillRandomWords    //
     ///////////////////////////
+    modifier skipFork() {
+        if (block.chainid != 31337) {
+            return;
+        }
+        _;
+    }
 
     function testFulfillRandomWordsCanOnlyBeCalledAfterPerformUpkeep(
         uint256 randomRequestId
-    ) public enterRaffle {
+    ) public enterRaffle skipFork {
         vm.expectRevert("nonexistent request");
         VRFCoordinatorV2Mock(coordinator).fulfillRandomWords(
             randomRequestId,
@@ -205,6 +219,7 @@ contract RaffleTest is Test {
     function testFulfillRandomWordsPicksAWinnerResetsAndSendsMoney()
         public
         enterRaffle
+        skipFork
     {
         uint256 additionalEntrants = 5;
         uint256 startingIndex = 1;
@@ -216,10 +231,10 @@ contract RaffleTest is Test {
         ) {
             address player = address(uint160(i));
             hoax(player, STARTING_USER_BALANCE);
-            raffle.enterRaffle{value: 1 ether}();
+            raffle.enterRaffle{value: ENTRANCE_FEE}();
         }
-        // Everyone partecipates with 1 ether each (Degenerate gamblers!! :D)
-        uint256 prize = 1 ether * (additionalEntrants + 1);
+        // Everyone partecipates with ENTRANCE_FEE each (Degenerate gamblers!! :D)
+        uint256 prize = ENTRANCE_FEE * (additionalEntrants + 1);
 
         vm.recordLogs();
         raffle.performUpkeep("");
@@ -244,11 +259,12 @@ contract RaffleTest is Test {
         console.log("lastWinner balance", lastWinner.balance);
         console.log(
             "Value calculated",
-            prize + STARTING_USER_BALANCE - 1 ether
+            prize + STARTING_USER_BALANCE - ENTRANCE_FEE
         );
         assert(
-            // Dude won the prize, so he has the prize plus his initial balance (- 1 ether because he gambled it) as a balance!
-            lastWinner.balance == (prize + (STARTING_USER_BALANCE - 1 ether))
+            // Dude won the prize, so he has the prize plus his initial balance (- ENTRANCE_FEE because he gambled it) as a balance!
+            lastWinner.balance ==
+                (prize + (STARTING_USER_BALANCE - ENTRANCE_FEE))
         );
     }
 }

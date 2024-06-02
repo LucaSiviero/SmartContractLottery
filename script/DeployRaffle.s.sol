@@ -17,7 +17,8 @@ contract DeployRaffle is Script {
             bytes32 keyHash,
             uint64 subscriptionId,
             uint32 callbackGasLimit,
-            address linkAddress
+            address linkAddress,
+            uint256 deployerKey
         ) = helperConfig.activeNetworkConfig();
 
         if (subscriptionId == 0) {
@@ -27,14 +28,17 @@ contract DeployRaffle is Script {
             coordinator = vrfCoordinatorAddress;
             subscriptionId = subId;
             FundSubscription fundSubscription = new FundSubscription();
+            console.log("Guess it's stopping here...");
             fundSubscription.fundSubscription(
                 vrfCoordinatorAddress,
                 subId,
-                linkAddress
+                linkAddress,
+                deployerKey
             );
+            console.log("Will not reach this");
         }
 
-        vm.startBroadcast();
+        vm.startBroadcast(deployerKey);
         Raffle raffle = new Raffle(
             entranceFee,
             interval,
@@ -46,7 +50,12 @@ contract DeployRaffle is Script {
         vm.stopBroadcast();
         console.log("coordinator is", coordinator);
         AddConsumer addConsumer = new AddConsumer();
-        addConsumer.addConsumer(address(raffle), coordinator, subscriptionId);
+        addConsumer.addConsumer(
+            address(raffle),
+            coordinator,
+            subscriptionId,
+            deployerKey
+        );
         console.log(
             "Adding coordinator with subId",
             coordinator,

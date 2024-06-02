@@ -11,19 +11,22 @@ contract CreateSubscription is Script {
     function createSubscriptionUsingConfig(
         HelperConfig helperConfig
     ) public returns (uint64, address) {
-        (, , address coordinator, , , , ) = helperConfig.activeNetworkConfig();
+        (, , address coordinator, , , , , uint256 deployerKey) = helperConfig
+            .activeNetworkConfig();
         (uint64 subscriptionId, address vrfCoordinator) = createSubscription(
-            coordinator
+            coordinator,
+            deployerKey
         );
         console.log("Created subscription with coordinator", coordinator);
         return (subscriptionId, vrfCoordinator);
     }
 
     function createSubscription(
-        address _vrfCoordinator
+        address _vrfCoordinator,
+        uint256 _deployerKey
     ) public returns (uint64, address) {
         console.log("Creating subscription on ChainId: ", block.chainid);
-        vm.startBroadcast();
+        vm.startBroadcast(_deployerKey);
         uint64 subscriptionId = VRFCoordinatorV2Mock(_vrfCoordinator)
             .createSubscription();
         vm.stopBroadcast();
@@ -46,37 +49,42 @@ contract FundSubscription is Script {
             ,
             uint64 subscriptionId,
             ,
-            address linkAddress
+            address linkAddress,
+            uint256 deployerKey
         ) = helperConfig.activeNetworkConfig();
         if (subscriptionId == 0) {
             CreateSubscription createSub = new CreateSubscription();
             (uint64 updatedSubId, ) = createSub.run(helperConfig);
             subscriptionId = updatedSubId;
         }
-        fundSubscription(coordinator, subscriptionId, linkAddress);
+        fundSubscription(coordinator, subscriptionId, linkAddress, deployerKey);
     }
 
     function fundSubscription(
         address _coordinator,
         uint64 _subscriptionId,
-        address _linkAddress
+        address _linkAddress,
+        uint256 _deployerKey
     ) public {
         console.log("Funding subscription: ", _subscriptionId);
         console.log("Using VRFCoordinator: ", _coordinator);
         console.log("On ChainID: ", block.chainid);
         if (block.chainid == 31337) {
-            vm.startBroadcast();
+            vm.startBroadcast(_deployerKey);
             VRFCoordinatorV2Mock(_coordinator).fundSubscription(
                 _subscriptionId,
                 FUND_AMOUNT
             );
             vm.stopBroadcast();
         } else {
+            console.log("I'm going to log LinkToken data");
             console.log(LinkToken(_linkAddress).balanceOf(msg.sender));
+            console.log("First log done");
             console.log(msg.sender);
             console.log(LinkToken(_linkAddress).balanceOf(address(this)));
             console.log(address(this));
-            vm.startBroadcast();
+            console.log("Link token address is", _linkAddress);
+            vm.startBroadcast(_deployerKey);
             LinkToken(_linkAddress).transferAndCall(
                 _coordinator,
                 FUND_AMOUNT,
@@ -95,14 +103,15 @@ contract AddConsumer is Script {
     function addConsumer(
         address _contractAddress,
         address _coordinator,
-        uint64 _subscriptionId
+        uint64 _subscriptionId,
+        uint256 _deployerKey
     ) public {
         console.log("Adding consumer contract: ", _contractAddress);
         console.log("Using VRFCoordinator: ", _coordinator);
         console.log("SubscriptionID is", _subscriptionId);
         console.log("On ChainID: ", block.chainid);
 
-        vm.startBroadcast();
+        vm.startBroadcast(_deployerKey);
         VRFCoordinatorV2Mock(_coordinator).addConsumer(
             _subscriptionId,
             _contractAddress
@@ -114,9 +123,17 @@ contract AddConsumer is Script {
         address _contractAddress,
         HelperConfig helperConfig
     ) public {
-        (, , address coordinator, , uint64 subscriptionId, , ) = helperConfig
-            .activeNetworkConfig();
-        addConsumer(_contractAddress, coordinator, subscriptionId);
+        (
+            ,
+            ,
+            address coordinator,
+            ,
+            uint64 subscriptionId,
+            ,
+            ,
+            uint256 deployerKey
+        ) = helperConfig.activeNetworkConfig();
+        addConsumer(_contractAddress, coordinator, subscriptionId, deployerKey);
     }
 
     function run(HelperConfig helperConfig) external {
